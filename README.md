@@ -12,15 +12,94 @@
 ---
 
 ## Architecture
+<img width="1099" height="613" alt="image" src="https://github.com/user-attachments/assets/5d3e8f46-be1b-4617-b12b-512d5d2b39b3" />
 
-Kiosk Client  
-→ REST API Server (eGovFrame)  
-→ WebSocket Server (Real-time Monitoring)  
-→ C# Sub Server (Security Separation)  
-→ MariaDB  
+### Client Layer
 
-Admin Web  
-→ Monitoring / Control Panel  
+**Kiosk**
+- REST API 기반 데이터 요청 (API Key 인증)
+- 관광 정보 조회 및 지도/길찾기 기능 사용
+- 사용자 이용 데이터 및 통계 전송
+
+**Admin**
+- WebSocket 기반 실시간 키오스크 상태 모니터링
+- Wake-on-LAN 및 WebSocket을 통한 원격 제어
+- 데이터 관리 및 서버 운영 기능
+- 허용된 IP 기반 접근 제한 적용
+
+---
+
+### Backend Layer
+
+#### 1. Web Server (IIS + C# Sub Server)
+
+- 외부 인터넷 통신 및 외부 API 연동 처리
+- C# 보조 서버를 통한 API 요청 중계 및 보안 분리
+- 이미지 및 동영상 파일 직접 서빙
+- IIS Reverse Proxy를 통해 WAS 서버와 내부 통신
+- Wake-on-LAN 기능 수행 (보조 서버 연동)
+
+-> 외부와 직접 통신하는 유일한 계층으로, 보안 경계 역할 수행
+
+---
+
+#### 2. WAS Server (eGovFrame / Spring)
+
+- 내부 네트워크 전용 (외부 인터넷 차단)
+- REST API 및 WebSocket 처리
+- 비즈니스 로직 및 데이터 처리 수행
+- 관리자 기능 (통계, 로그, 제어) 처리
+
+-> 모든 데이터 처리와 비즈니스 로직이 수행되는 핵심 계층
+
+---
+
+### Database Layer
+
+- MariaDB 기반 데이터베이스 이중화 구성 (DB1 / DB2)
+- WAS 서버에서만 접근 가능
+- 키오스크 로그, 통계 데이터, 관리자 데이터 저장
+
+-> 데이터 접근을 WAS로 제한하여 보안 강화
+
+---
+
+### External APIs
+
+- Google Maps API
+- OSRM (경로 탐색 및 비용 최적화)
+- 공공 데이터 API
+
+-> 모든 외부 API 호출은 Web Server를 통해서만 수행
+
+---
+
+## Security & Design Points
+
+- WAS 서버는 외부 인터넷과 완전 분리 (보안 강화)
+- Web Server를 통한 Reverse Proxy 구조로 API 접근 제어
+- 관리자 페이지는 IP 기반 접근 제한 적용
+- 키오스크는 API Key 기반 인증
+- DB는 WAS 서버만 접근 가능하도록 제한
+
+---
+
+## Data Flow
+
+### Kiosk Flow
+1. Kiosk → API 요청 (API Key 인증)
+2. Web Server → WAS로 요청 전달 (Reverse Proxy)
+3. WAS → DB 조회 및 처리
+4. WAS → Web Server → Kiosk 응답
+
+### Admin Flow
+1. Admin → Web Server 접속 (IP 제한)
+2. Web Server → WAS 연결
+3. WAS → WebSocket을 통해 실시간 상태 전달
+4. Admin → 키오스크 제어 요청 (WebSocket / API)
+5. Web Server → C# 보조 서버 → Wake-on-LAN 실행
+
+- 외부 API 호출은 Web Server에서만 수행
 
 ---
 
@@ -45,18 +124,15 @@ Admin Web
 - 데이터 관리 기능 (CRUD)
 - 서버 초기화 및 운영 기능
 
-### 5. Map Service
+### 5. Map & Routing System
 - Google Maps 기반 지도 표출 (다국어 지원)
-- Leaflet.js 활용 커스텀 지도 인터페이스 구현
+- Leaflet.js 기반 커스텀 지도 인터페이스 구현
 
-**+ 경로 계산 보정 로직**
+**경로 최적화 및 보정 로직**
 - OSRM 기반 경로 탐색 시스템 구축
-- GeoJSON 데이터를 활용하여 섬/내륙 및 연결 여부 구분
-- 단절된 지형(섬 지역) 경로 예외 처리 로직 구현
-- 실제 이동 가능한 경로 기준으로 결과 보정
-
-- 외부 API 의존도를 줄이기 위해 OSRM 활용하여 비용 최적화
-
+- GeoJSON을 활용한 지형(섬/내륙) 구분 및 연결 여부 판단
+- 단절된 경로에 대한 예외 처리 및 실제 이동 가능 경로 보정
+- 외부 API 의존도 감소 및 비용 최적화
 ---
 
 ## Tech Stack
